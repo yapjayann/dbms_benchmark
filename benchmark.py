@@ -8,7 +8,7 @@ from statistics import mean
 # === Configuration Variables ===
 
 # Number of data points to write to each DB
-N = 10
+N = 100
 
 # InfluxDB configuration
 INFLUX_URL = "http://localhost:8086/api/v2/write?org=myorg&bucket=mybucket&precision=s"
@@ -37,19 +37,40 @@ QUESTDB_CONFIG = {
     "port": 8812
 }
 
-# Connect to Docker to get container stats
+# Connect to Docker
 docker_client = docker.from_env()
 
 # === Helper Functions ===
 
-# Get CPU and memory usage for a Docker container
+# Get CPU % and memory usage for a Docker container by sampling over 5 seconds
 def get_stats(container_name):
-    stats = docker_client.containers.get(container_name).stats(stream=False)
-    cpu = stats["cpu_stats"]["cpu_usage"]["total_usage"]
-    mem = stats["memory_stats"]["usage"]
-    return cpu, mem
+    cpu_percents = []
+    mem_usage = 0
 
-# Estimate disk space used by a Docker volume (in bytes)
+    container = docker_client.containers.get(container_name)
+
+    for _ in range(5):
+        stats1 = container.stats(stream=False)
+        cpu_total_1 = stats1["cpu_stats"]["cpu_usage"]["total_usage"]
+        sys_cpu_1 = stats1["cpu_stats"]["system_cpu_usage"]
+        num_cpus = stats1["cpu_stats"].get("online_cpus", 1)
+        mem_usage = stats1["memory_stats"]["usage"]
+        time.sleep(1)
+        stats2 = container.stats(stream=False)
+        cpu_total_2 = stats2["cpu_stats"]["cpu_usage"]["total_usage"]
+        sys_cpu_2 = stats2["cpu_stats"]["system_cpu_usage"]
+
+        cpu_delta = cpu_total_2 - cpu_total_1
+        sys_delta = sys_cpu_2 - sys_cpu_1
+
+        if sys_delta > 0.0 and cpu_delta > 0.0:
+            cpu_percent = (cpu_delta / sys_delta) * num_cpus * 100.0
+            cpu_percents.append(cpu_percent)
+
+    avg_cpu = mean(cpu_percents) if cpu_percents else 0
+    return avg_cpu, mem_usage
+
+# Estimate disk usage
 def get_volume_size(volume_name):
     try:
         result = subprocess.run(
@@ -57,20 +78,18 @@ def get_volume_size(volume_name):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
         size_kb = int(result.stdout.split()[0])
-        return size_kb * 1024  # Convert KB to bytes
+        return size_kb * 1024
     except Exception as e:
         print(f"Error checking volume {volume_name}: {e}")
         return None
 
-# === Benchmark Functions for Each Database ===
+# === Benchmark Functions ===
 
-# Benchmark InfluxDB
 def benchmark_influx():
     print("\n--- InfluxDB ---")
     write_latencies = []
     start = time.time()
 
-    # Write N data points
     for i in range(N):
         point = f"sensor_data,sensor_id=1 value={i} {int(time.time())}"
         t0 = time.time()
@@ -78,13 +97,11 @@ def benchmark_influx():
         write_latencies.append(time.time() - t0)
     write_time = time.time() - start
 
-    # Measure read latency
     t0 = time.time()
     query = 'from(bucket:"mybucket") |> range(start: -1m)'
     requests.post(INFLUX_QUERY_URL, headers=INFLUX_HEADERS, data=query)
     read_latency = time.time() - t0
 
-    # Get CPU, memory, and disk usage
     cpu, mem = get_stats("influxdb_dbms")
     disk = get_volume_size("influxdb-data")
 
@@ -97,18 +114,15 @@ def benchmark_influx():
         "mem": mem
     }
 
-# Benchmark TimescaleDB
 def benchmark_timescale():
     print("\n--- TimescaleDB ---")
     conn = psycopg2.connect(**POSTGRES_CONFIG)
     cur = conn.cursor()
 
-    # Drop and recreate table
     cur.execute("DROP TABLE IF EXISTS sensor_data;")
     cur.execute("CREATE TABLE sensor_data (time TIMESTAMPTZ, value DOUBLE PRECISION);")
     conn.commit()
 
-    # Write N data points
     write_latencies = []
     start = time.time()
     for i in range(N):
@@ -118,7 +132,6 @@ def benchmark_timescale():
     conn.commit()
     write_time = time.time() - start
 
-    # Measure read latency
     t0 = time.time()
     cur.execute("SELECT * FROM sensor_data LIMIT 10;")
     cur.fetchall()
@@ -127,7 +140,6 @@ def benchmark_timescale():
     cur.close()
     conn.close()
 
-    # Get system usage
     cpu, mem = get_stats("timescaledb_dbms")
     disk = get_volume_size("timescaledb-data")
 
@@ -140,18 +152,15 @@ def benchmark_timescale():
         "mem": mem
     }
 
-# Benchmark QuestDB
 def benchmark_questdb():
     print("\n--- QuestDB ---")
     conn = psycopg2.connect(**QUESTDB_CONFIG)
     cur = conn.cursor()
 
-    # Drop and recreate table
     cur.execute("DROP TABLE IF EXISTS sensor_data;")
     cur.execute("CREATE TABLE sensor_data (ts TIMESTAMP, value DOUBLE);")
     conn.commit()
 
-    # Write N data points
     write_latencies = []
     start = time.time()
     for i in range(N):
@@ -161,7 +170,6 @@ def benchmark_questdb():
     conn.commit()
     write_time = time.time() - start
 
-    # Measure read latency
     t0 = time.time()
     cur.execute("SELECT * FROM sensor_data LIMIT 10;")
     cur.fetchall()
@@ -170,7 +178,6 @@ def benchmark_questdb():
     cur.close()
     conn.close()
 
-    # Get system usage
     cpu, mem = get_stats("questdb_dbms")
     disk = get_volume_size("questdb-data")
 
@@ -191,11 +198,10 @@ results = {
     "QuestDB": benchmark_questdb()
 }
 
-# === Print Final Summary ===
+# === Final Summary ===
 print("\n\n=== Final Metrics ===")
 for db, metrics in results.items():
     print(f"\n{db}:")
     for k, v in metrics.items():
-        # Auto-label metric units
-        unit = "MB" if "disk" in k else "s" if "latency" in k else "records/s" if "throughput" in k else "bytes"
+        unit = "MB" if "disk" in k else "%" if k == "cpu" else "s" if "latency" in k else "records/s" if "throughput" in k else "bytes"
         print(f"  {k}: {v:.4f} {unit}")
