@@ -8,7 +8,7 @@ This project compares the performance of three time-series databases — **Influ
 - 🧠 Memory usage
 - 🧮 CPU usage
 
-Useful for IoT sensor data evaluation in smart farming, monitoring, or any data-heavy time-series applications.
+Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
 ---
 
