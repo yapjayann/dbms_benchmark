@@ -162,7 +162,7 @@ QuestDB:
 
 ## 💬 Notes
 
-* You can customize the number of records and test duration in `benchmark.py`.
+* You can customize the number of records written to each database by changing the N value in `benchmark.py`.
 
 ---
 
