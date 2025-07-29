@@ -14,22 +14,50 @@ Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
 ## 📦 Requirements
 
-> 💡 This project was developed on WSL, but no WSL is needed for Windows users. Only Docker and Python are mandatory.
+> 💡 This project was developed on WSL (Ubuntu), but you **don’t need WSL** if you're on **Windows** — you just need Docker and Python.
 
-### ✅ Install These Tools
+---
 
-1. **[Docker Desktop](https://www.docker.com/products/docker-desktop)**  
-   Used to run the database containers.
+### 🪟 For Windows Users (No WSL)
 
-2. **[Python 3.10+](https://www.python.org/downloads/)**  
-   Used to run the benchmarking script.
+1. **[Install Docker Desktop](https://www.docker.com/products/docker-desktop)**
 
-3. **Install Python packages:**
-   Open a terminal or Command Prompt:
+   * Make sure Docker Engine and Docker Compose are running.
+   * Docker Desktop comes with Docker Compose built-in.
+
+2. **[Install Python 3.10 or newer](https://www.python.org/downloads/)**
+
+   * Use the official Python installer for Windows.
+
+3. **Install required Python packages**
+   Open **Command Prompt** or **PowerShell**, then run:
 
    ```bash
    pip install requests psycopg2-binary docker
+   ```
 
+---
+
+### 🐧 For WSL or Linux Users
+
+1. **Install Docker Engine**
+   Follow the [official Docker Engine installation guide](https://docs.docker.com/engine/install/) for your Linux distro.
+   Make sure your user is in the `docker` group (or use `sudo`).
+
+2. **Install Python 3.10+**
+   Most modern Linux distros have Python preinstalled. To check:
+
+   ```bash
+   python3 --version
+   ```
+
+   If not installed, use your package manager (e.g., `sudo apt install python3`).
+
+3. **Install required Python packages**
+
+   ```bash
+   pip3 install requests psycopg2-binary docker
+   ```
 
 ---
 
