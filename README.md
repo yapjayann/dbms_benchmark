@@ -14,7 +14,7 @@ Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
 ## 📦 Requirements
 
-> 💡 This project was developed on WSL, but no WSL is needed for Windows users. Just install Docker Desktop and Python.
+> 💡 This project was developed on WSL, but no WSL is needed for Windows users. Only Docker and Python are mandatory.
 
 ### ✅ Install These Tools
 
