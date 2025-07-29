@@ -86,7 +86,7 @@ Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
    ```bash
    cd dbms_benchmark
-   python benchmark.py
+   python3 benchmark.py
    ```
 
 4. **View the performance metrics in your terminal after benchmark.py finishes running**
