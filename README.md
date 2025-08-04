@@ -3,8 +3,8 @@
 This project compares the performance of three time-series databases — **InfluxDB**, **TimescaleDB**, and **QuestDB** — using a Python script and Docker containers. It measures:
 
 - 📈 Write throughput
-- 🕒 Write and read latency
-- 💿 Disk Usage
+- 🕒 Write and query latency
+- ⏱️ Total write time
 - 🧠 Memory usage
 - 🧮 CPU usage
 
@@ -116,28 +116,28 @@ dbms_benchmark/
 === Final Metrics ===
 
 InfluxDB:
-  write_throughput: 171.2045 records/s
-  avg_write_latency: 0.0058 s
-  read_latency: 0.0121 s
-  disk_mb: 0.0039 MB
-  cpu: 0.0882 %
-  mem: 58363904.0000 bytes
+  write_throughput: 195.0083 records/s
+  avg_write_latency: 0.0051 s
+  total_write_time: 51.2799 s
+  read_latency: 0.0243 s
+  cpu: 0.0780 %
+  mem: 79388672.0000 bytes
 
 TimescaleDB:
-  write_throughput: 1102.1255 records/s
-  avg_write_latency: 0.0009 s
-  read_latency: 0.0027 s
-  disk_mb: 0.0039 MB
-  cpu: 0.4144 %
-  mem: 158466048.0000 bytes
+  write_throughput: 2348.9885 records/s
+  avg_write_latency: 0.0004 s
+  total_write_time: 4.2572 s
+  read_latency: 0.0024 s
+  cpu: 0.5138 %
+  mem: 80670720.0000 bytes
 
 QuestDB:
-  write_throughput: 237.4059 records/s
-  avg_write_latency: 0.0042 s
-  read_latency: 0.0126 s
-  disk_mb: 0.0039 MB
-  cpu: 8.9792 %
-  mem: 530960384.0000 bytes
+  write_throughput: 419.6011 records/s
+  avg_write_latency: 0.0024 s
+  total_write_time: 23.8322 s
+  read_latency: 0.0231 s
+  cpu: 15.5710 %
+  mem: 554917888.0000 bytes
 ```
 
 ---
