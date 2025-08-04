@@ -147,9 +147,12 @@ QuestDB:
 * The script generates **dummy IoT sensor data** (temperature, humidity, etc.).
 * It writes the data into each database using the appropriate protocol:
 
-  * InfluxDB via **HTTP API**
-  * TimescaleDB via **PostgreSQL**
-  * QuestDB via **REST endpoint** 
+  * **InfluxDB**: via the official Python client (`influxdb-client`), which uses the **native line protocol over HTTP** with batching support.
+  * **TimescaleDB**: via **PostgreSQL** using the `psycopg2` library, allowing direct SQL operations
+  * **QuestDB**: via the **PostgreSQL wire protocol**, also using `psycopg2`, which offers better performance than its REST API. 
+
+> Although QuestDB supports a REST endpoint, it’s not optimized for high-throughput ingestion. For this benchmark, the PostgreSQL protocol is used instead for more accurate and scalable performance measurement.
+
 * It then:
 
   * Measures write throughput (records per second)
@@ -165,4 +168,6 @@ QuestDB:
 * You can customize the number of records written to each database by changing the N value in `benchmark.py`.
 
 ---
+
+
 
