@@ -2,15 +2,13 @@ import time
 import requests
 import psycopg2
 import docker
-import subprocess
 from statistics import mean
 
 # === Configuration Variables ===
 
-# Number of data points to write to each DB
-N = 100
+N = 10000  # Number of data points
 
-# InfluxDB configuration
+# InfluxDB
 INFLUX_URL = "http://localhost:8086/api/v2/write?org=myorg&bucket=mybucket&precision=s"
 INFLUX_QUERY_URL = "http://localhost:8086/api/v2/query?org=myorg"
 INFLUX_TOKEN = "mytoken"
@@ -19,7 +17,7 @@ INFLUX_HEADERS = {
     "Content-Type": "application/vnd.flux"
 }
 
-# TimescaleDB (PostgreSQL) configuration
+# TimescaleDB
 POSTGRES_CONFIG = {
     "dbname": "timeseries",
     "user": "postgres",
@@ -28,7 +26,7 @@ POSTGRES_CONFIG = {
     "port": 5432
 }
 
-# QuestDB configuration
+# QuestDB
 QUESTDB_CONFIG = {
     "dbname": "qdb",
     "user": "admin",
@@ -37,16 +35,13 @@ QUESTDB_CONFIG = {
     "port": 8812
 }
 
-# Connect to Docker
 docker_client = docker.from_env()
 
-# === Helper Functions ===
+# === Helper: Docker stats ===
 
-# Get CPU % and memory usage for a Docker container by sampling over 5 seconds
 def get_stats(container_name):
     cpu_percents = []
     mem_usage = 0
-
     container = docker_client.containers.get(container_name)
 
     for _ in range(5):
@@ -70,19 +65,6 @@ def get_stats(container_name):
     avg_cpu = mean(cpu_percents) if cpu_percents else 0
     return avg_cpu, mem_usage
 
-# Estimate disk usage
-def get_volume_size(volume_name):
-    try:
-        result = subprocess.run(
-            ['docker', 'run', '--rm', '-v', f'{volume_name}:/data', 'alpine', 'du', '-s', '/data'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-        size_kb = int(result.stdout.split()[0])
-        return size_kb * 1024
-    except Exception as e:
-        print(f"Error checking volume {volume_name}: {e}")
-        return None
-
 # === Benchmark Functions ===
 
 def benchmark_influx():
@@ -103,13 +85,12 @@ def benchmark_influx():
     read_latency = time.time() - t0
 
     cpu, mem = get_stats("influxdb_dbms")
-    disk = get_volume_size("influxdb-data")
 
     return {
         "write_throughput": N / write_time,
         "avg_write_latency": mean(write_latencies),
+        "total_write_time": write_time,
         "read_latency": read_latency,
-        "disk_mb": disk / 1024 / 1024 if disk else 0,
         "cpu": cpu,
         "mem": mem
     }
@@ -141,13 +122,12 @@ def benchmark_timescale():
     conn.close()
 
     cpu, mem = get_stats("timescaledb_dbms")
-    disk = get_volume_size("timescaledb-data")
 
     return {
         "write_throughput": N / write_time,
         "avg_write_latency": mean(write_latencies),
+        "total_write_time": write_time,
         "read_latency": read_latency,
-        "disk_mb": disk / 1024 / 1024 if disk else 0,
         "cpu": cpu,
         "mem": mem
     }
@@ -179,18 +159,17 @@ def benchmark_questdb():
     conn.close()
 
     cpu, mem = get_stats("questdb_dbms")
-    disk = get_volume_size("questdb-data")
 
     return {
         "write_throughput": N / write_time,
         "avg_write_latency": mean(write_latencies),
+        "total_write_time": write_time,
         "read_latency": read_latency,
-        "disk_mb": disk / 1024 / 1024 if disk else 0,
         "cpu": cpu,
         "mem": mem
     }
 
-# === Run All Benchmarks ===
+# === Run and Report ===
 
 results = {
     "InfluxDB": benchmark_influx(),
@@ -198,10 +177,14 @@ results = {
     "QuestDB": benchmark_questdb()
 }
 
-# === Final Summary ===
 print("\n\n=== Final Metrics ===")
 for db, metrics in results.items():
     print(f"\n{db}:")
     for k, v in metrics.items():
-        unit = "MB" if "disk" in k else "%" if k == "cpu" else "s" if "latency" in k else "records/s" if "throughput" in k else "bytes"
+        unit = (
+            "s" if "latency" in k or "time" in k
+            else "%" if k == "cpu"
+            else "records/s" if "throughput" in k
+            else "bytes"
+        )
         print(f"  {k}: {v:.4f} {unit}")

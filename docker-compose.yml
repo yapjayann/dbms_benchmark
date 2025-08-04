@@ -36,7 +36,7 @@ services:
       - "8812:8812"   # PostgreSQL wire protocol
       - "9009:9009"   # InfluxDB line protocol
     volumes:
-      - questdb-data:/root/.questdb/db
+      - questdb-data:/root/.questdb
 
 volumes:
   influxdb-data:
