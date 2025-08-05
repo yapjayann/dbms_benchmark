@@ -123,7 +123,7 @@ def benchmark_influx():
 
     write_time = time.time() - start
 
-    # Run simple query to measure read latency
+    # Run full table query to measure read latency
     t0 = time.time()
     query = {
     "query": '''
@@ -256,7 +256,7 @@ def benchmark_questdb():
     conn.commit()
     write_time = time.time() - start
 
-    # Read 10 rows to test query performance
+    # Read whole table test query performance
     t0 = time.time()
     cur.execute("SELECT * FROM power_data;")
     cur.fetchall()
