@@ -141,28 +141,28 @@ dbms_benchmark/
 === Final Metrics ===
 
 InfluxDB:
-  write_throughput: 195.0083 records/s
-  avg_write_latency: 0.0051 s
-  total_write_time: 51.2799 s
-  read_latency: 0.0243 s
-  cpu: 0.0780 %
-  mem: 79388672.0000 bytes
+  write_throughput: 121.7884 records/s
+  avg_write_latency: 0.0068 s
+  total_write_time: 8.2110 s
+  read_latency: 0.0162 s
+  cpu: 6.6455 %
+  mem: 260919296.0000 bytes
 
 TimescaleDB:
-  write_throughput: 2348.9885 records/s
-  avg_write_latency: 0.0004 s
-  total_write_time: 4.2572 s
-  read_latency: 0.0024 s
-  cpu: 0.5138 %
-  mem: 80670720.0000 bytes
+  write_throughput: 838.4810 records/s
+  avg_write_latency: 0.0006 s
+  total_write_time: 1.1926 s
+  read_latency: 0.0044 s
+  cpu: 0.1922 %
+  mem: 80605184.0000 bytes
 
 QuestDB:
-  write_throughput: 419.6011 records/s
-  avg_write_latency: 0.0024 s
-  total_write_time: 23.8322 s
-  read_latency: 0.0231 s
-  cpu: 15.5710 %
-  mem: 554917888.0000 bytes
+  write_throughput: 165.2752 records/s
+  avg_write_latency: 0.0034 s
+  total_write_time: 6.0505 s
+  read_latency: 0.0266 s
+  cpu: 30.6094 %
+  mem: 543158272.0000 bytes
 ```
 
 ---
@@ -174,23 +174,22 @@ QuestDB:
 
   - **InfluxDB**:
     - Uses the **native line protocol** over HTTP via direct `POST` requests.
-    - Data is written one row at a time using precise timestamps (UNIX seconds).
-    - Queried using the **Flux query language** (`Content-Type: application/vnd.flux`).
+    - Data is written **one row at a time** with timestamps in **UNIX seconds**.
+    - Queried using the **Flux query language**.
 
   - **TimescaleDB**:
     - Uses standard **PostgreSQL SQL inserts** via the `psycopg2` library.
-    - All inserts are done in a loop and committed in bulk.
-    - Queried using plain SQL (e.g., `SELECT * FROM power_data LIMIT 10`).
+    - Rows are inserted **one by one in a loop**, then committed together.
+    - Queried using plain SQL (e.g., `SELECT * FROM power_data`).
 
   - **QuestDB**:
-    - Also uses the **PostgreSQL wire protocol** via `psycopg2`, not the REST API.
-    - Offers high-ingestion performance using PostgreSQL-compatible SQL inserts.
-    - Queried using SQL over the same PostgreSQL connection.
+    - Uses the **PostgreSQL wire protocol** via `psycopg2` for ingestion (not the REST API).
+    - Inserts are done **row by row**, similar to TimescaleDB.
+    - Queried using SQL over the same PostgreSQL-compatible connection.
 
-> ⚠️ QuestDB supports a REST API, but it’s not optimized for high-throughput ingest. This benchmark uses the PostgreSQL wire protocol instead for more consistent performance.
+> ⚠️ While QuestDB supports a REST API, it’s not optimized for high-throughput ingestion. This benchmark uses the PostgreSQL wire protocol for more consistent performance.
 
 - For each database, the benchmark:
-
   - Measures **write throughput** (records per second)
   - Calculates **average write latency** (per row)
   - Measures **read latency** (for basic queries)
