@@ -3,8 +3,9 @@
 This project compares the performance of three time-series databases — **InfluxDB**, **TimescaleDB**, and **QuestDB** — using a Python script and Docker containers. It measures:
 
 - 📈 Write throughput
-- 🕒 Write and query latency
+- 🕒 Average write latency
 - ⏱️ Total write time
+- 🕒 Query latency (full scan)
 - 🧠 Memory usage
 - 🧮 CPU usage
 
@@ -63,6 +64,26 @@ Useful for data evaluation in data-heavy time-series applications.
 
 ---
 
+## 🧼 Dataset Preprocessing
+
+Before benchmarking, you need to generate a cleaned dataset from the original source.
+
+1. **Download the original dataset**
+   [UCI Individual Household Electric Power Consumption Dataset](https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption)
+
+2. **Unzip it** and place `household_power_consumption.txt` in the project folder.
+
+3. **Run the preprocessing script**
+   This will clean and convert the data into `cleaned_power_data.csv`:
+
+   ```bash
+   python3 preprocess.py
+   ```
+
+> This cleaned CSV will then be used during benchmarking.
+
+---
+
 ## 🚀 How to Run the Benchmark
 
 1. **Clone the repository and open the folder**
@@ -106,6 +127,7 @@ Useful for data evaluation in data-heavy time-series applications.
 
 ```
 dbms_benchmark/
+├── preprocess.py          # Cleans and transforms the raw power dataset, run this first
 ├── benchmark.py           # Python script to insert/query data and measure performance
 ├── docker-compose.yml     # Starts all 3 databases in containers
 └── README.md              # You're reading this
@@ -147,7 +169,7 @@ QuestDB:
 
 ## 🧠 How It Works
 
-- The script loads **real, cleaned power consumption data** from `cleaned_power_data.csv` (sampled to `N = 1000` rows).
+- The benchmark script loads **real, cleaned power consumption data** from `cleaned_power_data.csv` (sampled to `N` rows, modifiable in the script).
 - It writes the data into each database using its respective ingestion method:
 
   - **InfluxDB**:
@@ -173,7 +195,6 @@ QuestDB:
   - Calculates **average write latency** (per row)
   - Measures **read latency** (for basic queries)
   - Monitors **CPU and memory usage** of each Docker container
-  - Tracks **disk usage** after all records are written
 
 ---
 
@@ -182,6 +203,4 @@ QuestDB:
 * You can customize the number of records written to each database by changing the N value in `benchmark.py`.
 
 ---
-
-
 
