@@ -8,7 +8,7 @@ This project compares the performance of three time-series databases — **Influ
 - 🧠 Memory usage
 - 🧮 CPU usage
 
-Useful for IoT sensor data evaluation in data-heavy time-series applications.
+Useful for data evaluation in data-heavy time-series applications.
 
 ---
 
@@ -34,6 +34,7 @@ Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
    ```bash
    pip install requests psycopg2-binary docker
+   pip install pandas
    ```
 
 ---
@@ -57,6 +58,7 @@ Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
    ```bash
    pip3 install requests psycopg2-binary docker
+   pip3 install pandas
    ```
 
 ---
@@ -91,10 +93,11 @@ Useful for IoT sensor data evaluation in data-heavy time-series applications.
 
 4. **View the performance metrics in your terminal after benchmark.py finishes running**
 
-5. **Stop the containers when done**
+5. **Stop the containers when done and delete volumes**
 
    ```bash
    docker compose down
+   docker compose down -v
    ```
 
 ---
@@ -144,22 +147,33 @@ QuestDB:
 
 ## 🧠 How It Works
 
-* The script generates **dummy IoT sensor data** (temperature, humidity, etc.).
-* It writes the data into each database using the appropriate protocol:
+- The script loads **real, cleaned power consumption data** from `cleaned_power_data.csv` (sampled to `N = 1000` rows).
+- It writes the data into each database using its respective ingestion method:
 
-  * **InfluxDB**: via the official Python client (`influxdb-client`), which uses the **native line protocol over HTTP** with batching support.
-  * **TimescaleDB**: via **PostgreSQL** using the `psycopg2` library, allowing direct SQL operations
-  * **QuestDB**: via the **PostgreSQL wire protocol**, also using `psycopg2`, which offers better performance than its REST API. 
+  - **InfluxDB**:
+    - Uses the **native line protocol** over HTTP via direct `POST` requests.
+    - Data is written one row at a time using precise timestamps (UNIX seconds).
+    - Queried using the **Flux query language** (`Content-Type: application/vnd.flux`).
 
-> Although QuestDB supports a REST endpoint, it’s not optimized for high-throughput ingestion. For this benchmark, the PostgreSQL protocol is used instead for more accurate and scalable performance measurement.
+  - **TimescaleDB**:
+    - Uses standard **PostgreSQL SQL inserts** via the `psycopg2` library.
+    - All inserts are done in a loop and committed in bulk.
+    - Queried using plain SQL (e.g., `SELECT * FROM power_data LIMIT 10`).
 
-* It then:
+  - **QuestDB**:
+    - Also uses the **PostgreSQL wire protocol** via `psycopg2`, not the REST API.
+    - Offers high-ingestion performance using PostgreSQL-compatible SQL inserts.
+    - Queried using SQL over the same PostgreSQL connection.
 
-  * Measures write throughput (records per second)
-  * Calculates average write latency per record
-  * Measures read latency for retrieving inserted records
-  * Monitors CPU and memory usage for each container
-  * Tracks disk usage of each database after insertion
+> ⚠️ QuestDB supports a REST API, but it’s not optimized for high-throughput ingest. This benchmark uses the PostgreSQL wire protocol instead for more consistent performance.
+
+- For each database, the benchmark:
+
+  - Measures **write throughput** (records per second)
+  - Calculates **average write latency** (per row)
+  - Measures **read latency** (for basic queries)
+  - Monitors **CPU and memory usage** of each Docker container
+  - Tracks **disk usage** after all records are written
 
 ---
 

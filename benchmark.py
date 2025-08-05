@@ -3,12 +3,16 @@ import requests
 import psycopg2
 import docker
 from statistics import mean
-import random
 from datetime import datetime
+import pandas as pd
 
 # === Configuration ===
 
-N = 10000  # Number of records to insert in each database
+N = 1000  # Number of records extracted from dataset to insert in each database
+
+# === Load Cleaned Data ===
+csv_data = pd.read_csv("cleaned_power_data.csv")
+csv_data = csv_data.sample(n=N, random_state=42).reset_index(drop=True)
 
 # --- InfluxDB HTTP API endpoint and headers ---
 INFLUX_URL = "http://localhost:8086/api/v2/write?org=myorg&bucket=mybucket&precision=s"
@@ -74,16 +78,20 @@ def get_stats(container_name):
     avg_cpu = mean(cpu_percents) if cpu_percents else 0
     return avg_cpu, mem_usage
 
-# === Generate sample data for all databases ===
-def generate_data(i):
+# === Get data from CSV ===
+def get_csv_data(i): 
+    row = csv_data.iloc[i]
     return {
-        "timestamp": int(time.time()),  # Current UNIX timestamp
-        "sensor_id": random.randint(1, 10),
-        "location": "KLCC",  # Simulated fixed location
-        "co2_level": round(random.uniform(350.0, 500.0), 2),  # Simulated CO2
-        "noise_level": round(random.uniform(30.0, 100.0), 2),  # Simulated noise
-        "temperature": round(random.uniform(25.0, 40.0), 2)  # Simulated temperature
+        "timestamp": pd.to_datetime(row["timestamp"]),
+        "gap": float(row["Global_active_power"]),
+        "grp": float(row["Global_reactive_power"]),
+        "voltage": float(row["Voltage"]),
+        "intensity": float(row["Global_intensity"]),
+        "sub_1": float(row["Sub_metering_1"]),
+        "sub_2": float(row["Sub_metering_2"]),
+        "sub_3": float(row["Sub_metering_3"])
     }
+
 
 # === Benchmark for InfluxDB ===
 def benchmark_influx():
@@ -92,26 +100,40 @@ def benchmark_influx():
     start = time.time()
 
     for i in range(N):
-        data = generate_data(i)
+        data = get_csv_data(i)
 
+        ts = int(data["timestamp"].timestamp())  # Convert to UNIX timestamp
         # Create line protocol string for InfluxDB
         line = (
-            f"sensor_data,sensor_id={data['sensor_id']},location={data['location']} "
-            f"co2_level={data['co2_level']},noise_level={data['noise_level']},temperature={data['temperature']} "
-            f"{data['timestamp']}"
+            f"power_data "
+            f"global_active_power={data['gap']},"
+            f"global_reactive_power={data['grp']},"
+            f"voltage={data['voltage']},"
+            f"global_intensity={data['intensity']},"
+            f"sub_metering_1={data['sub_1']},"
+            f"sub_metering_2={data['sub_2']},"
+            f"sub_metering_3={data['sub_3']} "
+            f"{ts}"
         )
 
         # Measure write latency
         t0 = time.time()
-        requests.post(INFLUX_URL, data=line, headers={"Authorization": f"Token {INFLUX_TOKEN}"})
+        requests.post(INFLUX_URL, data=line, headers=INFLUX_HEADERS)
         write_latencies.append(time.time() - t0)
 
     write_time = time.time() - start
 
     # Run simple query to measure read latency
     t0 = time.time()
-    query = 'from(bucket:"mybucket") |> range(start: -1m)'
-    requests.post(INFLUX_QUERY_URL, headers=INFLUX_HEADERS, data=query)
+    query = {
+    "query": '''
+    from(bucket: "mybucket")
+    |> range(start: 0)
+    |> filter(fn: (r) => r._measurement == "power_data")
+    '''
+    }
+    requests.post(INFLUX_QUERY_URL, headers=INFLUX_HEADERS, json=query)
+
     read_latency = time.time() - t0
 
     cpu, mem = get_stats("influxdb_dbms")
@@ -132,29 +154,39 @@ def benchmark_timescale():
     cur = conn.cursor()
 
     # Reset table
-    cur.execute("DROP TABLE IF EXISTS sensor_data;")
+    cur.execute("DROP TABLE IF EXISTS power_data;")
     cur.execute("""
-        CREATE TABLE sensor_data (
+        CREATE TABLE power_data (
             timestamp TIMESTAMPTZ,
-            sensor_id INT,
-            location TEXT,
-            co2_level DOUBLE PRECISION,
-            noise_level DOUBLE PRECISION,
-            temperature DOUBLE PRECISION
+            global_active_power DOUBLE PRECISION,
+            global_reactive_power DOUBLE PRECISION,
+            voltage DOUBLE PRECISION,
+            global_intensity DOUBLE PRECISION,
+            sub_metering_1 DOUBLE PRECISION,
+            sub_metering_2 DOUBLE PRECISION,
+            sub_metering_3 DOUBLE PRECISION
         );
     """)
+
     conn.commit()
 
     write_latencies = []
     start = time.time()
 
     for i in range(N):
-        data = generate_data(i)
+        data = get_csv_data(i)
         t0 = time.time()
         cur.execute("""
-            INSERT INTO sensor_data (timestamp, sensor_id, location, co2_level, noise_level, temperature)
-            VALUES (NOW(), %s, %s, %s, %s, %s);
-        """, (data["sensor_id"], data["location"], data["co2_level"], data["noise_level"], data["temperature"]))
+            INSERT INTO power_data (
+                timestamp, global_active_power, global_reactive_power,
+                voltage, global_intensity,
+                sub_metering_1, sub_metering_2, sub_metering_3
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        """, (
+            data["timestamp"], data["gap"], data["grp"], data["voltage"],
+            data["intensity"], data["sub_1"], data["sub_2"], data["sub_3"]
+        ))
         write_latencies.append(time.time() - t0)
 
     conn.commit()
@@ -162,7 +194,7 @@ def benchmark_timescale():
 
     # Simple read query
     t0 = time.time()
-    cur.execute("SELECT * FROM sensor_data LIMIT 10;")
+    cur.execute("SELECT * FROM power_data;")
     cur.fetchall()
     read_latency = time.time() - t0
 
@@ -186,16 +218,18 @@ def benchmark_questdb():
     conn = psycopg2.connect(**QUESTDB_CONFIG)
     cur = conn.cursor()
 
-    # Reset table and use SYMBOL for "location" for performance
-    cur.execute("DROP TABLE IF EXISTS sensor_data;")
+    # Reset table
+    cur.execute("DROP TABLE IF EXISTS power_data;")
     cur.execute("""
-        CREATE TABLE sensor_data (
+        CREATE TABLE power_data (
             timestamp TIMESTAMP,
-            sensor_id INT,
-            location SYMBOL,
-            co2_level DOUBLE,
-            noise_level DOUBLE,
-            temperature DOUBLE
+            global_active_power DOUBLE PRECISION,
+            global_reactive_power DOUBLE PRECISION,
+            voltage DOUBLE PRECISION,
+            global_intensity DOUBLE PRECISION,
+            sub_metering_1 DOUBLE PRECISION,
+            sub_metering_2 DOUBLE PRECISION,
+            sub_metering_3 DOUBLE PRECISION
         );
     """)
     conn.commit()
@@ -204,12 +238,19 @@ def benchmark_questdb():
     start = time.time()
 
     for i in range(N):
-        data = generate_data(i)
+        data = get_csv_data(i)
         t0 = time.time()
         cur.execute("""
-            INSERT INTO sensor_data (timestamp, sensor_id, location, co2_level, noise_level, temperature)
-            VALUES (NOW(), %s, %s, %s, %s, %s);
-        """, (data["sensor_id"], data["location"], data["co2_level"], data["noise_level"], data["temperature"]))
+            INSERT INTO power_data (
+                timestamp, global_active_power, global_reactive_power,
+                voltage, global_intensity,
+                sub_metering_1, sub_metering_2, sub_metering_3
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        """, (
+            data["timestamp"], data["gap"], data["grp"], data["voltage"],
+            data["intensity"], data["sub_1"], data["sub_2"], data["sub_3"]
+        ))
         write_latencies.append(time.time() - t0)
 
     conn.commit()
@@ -217,7 +258,7 @@ def benchmark_questdb():
 
     # Read 10 rows to test query performance
     t0 = time.time()
-    cur.execute("SELECT * FROM sensor_data LIMIT 10;")
+    cur.execute("SELECT * FROM power_data;")
     cur.fetchall()
     read_latency = time.time() - t0
 
