@@ -349,6 +349,7 @@ results["QuestDB"] = benchmark_questdb()
 
 # Nicely formatted printout of all metrics
 print("\n\n=== Final Metrics ===")
+print(f"\n📊 Benchmark Results for {N} Records\n")
 for db, metrics in results.items():
     print(f"\n{db}:")
     for k, v in metrics.items():

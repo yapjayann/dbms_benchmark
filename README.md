@@ -156,32 +156,35 @@ Starting benchmarks...
 
 === Final Metrics ===
 
+📊 Benchmark Results for 1000 Records
+
+
 InfluxDB:
-  write_throughput: 135.2883 records/s
-  avg_write_latency: 0.0062 s
-  total_write_time: 7.3916 s
-  read_latency: 0.0068 s
-  agg_query_latency: 0.0067 s
-  cpu: 6.4224 %
-  mem: 280551424.0000 bytes
+  write_throughput: 145.0281 records/s
+  avg_write_latency: 0.0058 s
+  total_write_time: 6.8952 s
+  read_latency: 0.0086 s
+  agg_query_latency: 0.0073 s
+  cpu: 5.4983 %
+  mem: 281646080.0000 bytes
 
 TimescaleDB:
-  write_throughput: 917.0927 records/s
-  avg_write_latency: 0.0005 s
-  total_write_time: 1.0904 s
-  read_latency: 0.0043 s
-  agg_query_latency: 0.0039 s
-  cpu: 0.2936 %
-  mem: 159299584.0000 bytes
+  write_throughput: 883.7476 records/s
+  avg_write_latency: 0.0006 s
+  total_write_time: 1.1315 s
+  read_latency: 0.0045 s
+  agg_query_latency: 0.0045 s
+  cpu: 0.4653 %
+  mem: 159196160.0000 bytes
 
 QuestDB:
-  write_throughput: 187.2666 records/s
+  write_throughput: 191.5099 records/s
   avg_write_latency: 0.0029 s
-  total_write_time: 5.3400 s
-  read_latency: 0.0265 s
-  agg_query_latency: 0.0163 s
-  cpu: 15.3654 %
-  mem: 572528640.0000 bytes
+  total_write_time: 5.2217 s
+  read_latency: 0.0204 s
+  agg_query_latency: 0.0158 s
+  cpu: 13.3839 %
+  mem: 555556864.0000 bytes
 ```
 
 ---
