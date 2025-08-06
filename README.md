@@ -5,7 +5,8 @@ This project compares the performance of three time-series databases — **Influ
 - 📈 Write throughput
 - 🕒 Average write latency
 - ⏱️ Total write time
-- 🕒 Query latency (full scan)
+- 🔍 Query latency (Full scan)
+- 🔍 Query Latency (Aggregation)
 - 🧠 Memory usage
 - 🧮 CPU usage
 
@@ -141,28 +142,31 @@ dbms_benchmark/
 === Final Metrics ===
 
 InfluxDB:
-  write_throughput: 121.7884 records/s
-  avg_write_latency: 0.0068 s
-  total_write_time: 8.2110 s
-  read_latency: 0.0162 s
-  cpu: 6.6455 %
-  mem: 260919296.0000 bytes
+  write_throughput: 127.6691 records/s
+  avg_write_latency: 0.0065 s
+  total_write_time: 7.8327 s
+  read_latency: 0.0106 s
+  agg_query_latency: 0.0121 s
+  cpu: 6.3882 %
+  mem: 417878016.0000 bytes
 
 TimescaleDB:
-  write_throughput: 838.4810 records/s
+  write_throughput: 836.3015 records/s
   avg_write_latency: 0.0006 s
-  total_write_time: 1.1926 s
-  read_latency: 0.0044 s
-  cpu: 0.1922 %
-  mem: 80605184.0000 bytes
+  total_write_time: 1.1957 s
+  read_latency: 0.0072 s
+  agg_query_latency: 0.0080 s
+  cpu: 0.3107 %
+  mem: 202743808.0000 bytes
 
 QuestDB:
-  write_throughput: 165.2752 records/s
-  avg_write_latency: 0.0034 s
-  total_write_time: 6.0505 s
-  read_latency: 0.0266 s
-  cpu: 30.6094 %
-  mem: 543158272.0000 bytes
+  write_throughput: 169.7411 records/s
+  avg_write_latency: 0.0031 s
+  total_write_time: 5.8913 s
+  read_latency: 0.0154 s
+  agg_query_latency: 0.0280 s
+  cpu: 18.9679 %
+  mem: 654708736.0000 bytes
 ```
 
 ---
@@ -192,7 +196,7 @@ QuestDB:
 - For each database, the benchmark:
   - Measures **write throughput** (records per second)
   - Calculates **average write latency** (per row)
-  - Measures **read latency** (for basic queries)
+  - Measures **read latency** (for full scan and aggregation)
   - Monitors **CPU and memory usage** of each Docker container
 
 ---

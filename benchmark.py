@@ -136,6 +136,23 @@ def benchmark_influx():
 
     read_latency = time.time() - t0
 
+
+    # Aggregation query: hourly average of global_active_power
+    t0 = time.time()
+    agg_query = {
+    "query": '''
+    from(bucket: "mybucket")
+    |> range(start: 0)
+    |> filter(fn: (r) => r._measurement == "power_data" and r._field == "global_active_power")
+    |> aggregateWindow(every: 1h, fn: mean)
+    |> yield(name: "mean")
+    '''
+    
+    }
+    requests.post(INFLUX_QUERY_URL, headers=INFLUX_HEADERS, json=agg_query)
+    agg_latency = time.time() - t0
+
+
     cpu, mem = get_stats("influxdb_dbms")
 
     return {
@@ -143,6 +160,7 @@ def benchmark_influx():
         "avg_write_latency": mean(write_latencies),
         "total_write_time": write_time,
         "read_latency": read_latency,
+        "agg_query_latency": agg_latency,
         "cpu": cpu,
         "mem": mem
     }
@@ -198,6 +216,19 @@ def benchmark_timescale():
     cur.fetchall()
     read_latency = time.time() - t0
 
+    # Aggregation query: hourly average of global_active_power
+    t0 = time.time()
+    cur.execute("""
+        SELECT date_trunc('hour', timestamp) AS hour,
+               AVG(global_active_power)
+        FROM power_data
+        GROUP BY hour
+        ORDER BY hour;
+    """)
+    cur.fetchall()
+    agg_latency = time.time() - t0
+
+
     cur.close()
     conn.close()
 
@@ -208,6 +239,7 @@ def benchmark_timescale():
         "avg_write_latency": mean(write_latencies),
         "total_write_time": write_time,
         "read_latency": read_latency,
+        "agg_query_latency": agg_latency,
         "cpu": cpu,
         "mem": mem
     }
@@ -262,6 +294,19 @@ def benchmark_questdb():
     cur.fetchall()
     read_latency = time.time() - t0
 
+    # Aggregation query: hourly average of global_active_power
+    t0 = time.time()
+    cur.execute("""
+        SELECT date_trunc('hour', timestamp) AS hour,
+               AVG(global_active_power)
+        FROM power_data
+        GROUP BY hour
+        ORDER BY hour;
+    """)
+    cur.fetchall()
+    agg_latency = time.time() - t0
+
+    
     cur.close()
     conn.close()
 
@@ -272,6 +317,7 @@ def benchmark_questdb():
         "avg_write_latency": mean(write_latencies),
         "total_write_time": write_time,
         "read_latency": read_latency,
+        "agg_query_latency": agg_latency,
         "cpu": cpu,
         "mem": mem
     }
