@@ -53,15 +53,15 @@ def get_stats(container_name):
     # Get container object
     container = docker_client.containers.get(container_name)
 
-    # Sample usage over 5 seconds to get average CPU and memory usage
-    for _ in range(5):
+    # Sample usage over 2 seconds to get average CPU and memory usage (because TimescaleDB can be quite fast ~ 1.3s)
+    for _ in range(4):
         stats1 = container.stats(stream=False)
         cpu_total_1 = stats1["cpu_stats"]["cpu_usage"]["total_usage"]
         sys_cpu_1 = stats1["cpu_stats"]["system_cpu_usage"]
         num_cpus = stats1["cpu_stats"].get("online_cpus", 1)
         mem_usages.append(stats1["memory_stats"]["usage"])
 
-        time.sleep(1)
+        time.sleep(0.5)
 
         stats2 = container.stats(stream=False)
         cpu_total_2 = stats2["cpu_stats"]["cpu_usage"]["total_usage"]
@@ -75,7 +75,7 @@ def get_stats(container_name):
             cpu_percent = (cpu_delta / sys_delta) * num_cpus * 100.0
             cpu_percents.append(cpu_percent)
 
-    # Average CPU and memory usage over the 5 samples
+    # Average CPU and memory usage over the 4 samples
     avg_cpu = mean(cpu_percents) if cpu_percents else 0
     avg_mem = mean(mem_usages) if mem_usages else 0
 
@@ -327,11 +327,25 @@ def benchmark_questdb():
     }
 
 # === Run All Benchmarks and Display Results ===
-results = {
-    "InfluxDB": benchmark_influx(),
-    "TimescaleDB": benchmark_timescale(),
-    "QuestDB": benchmark_questdb()
-}
+print("Starting benchmarks...")
+results = {}
+
+# InfluxDB
+results["InfluxDB"] = benchmark_influx()
+
+# Cooldown before next benchmark
+print("\n🕒 Cooling down before TimescaleDB test...\n")
+time.sleep(10)  # Cooldown to allow InfluxDB to stabilize
+
+# TimescaleDB
+results["TimescaleDB"] = benchmark_timescale()
+
+# Cooldown before next benchmark
+print("\n🕒 Cooling down before QuestDB test...\n")
+time.sleep(10) # Cooldown to allow TimescaleDB to stabilize
+
+# QuestDB
+results["QuestDB"] = benchmark_questdb()
 
 # Nicely formatted printout of all metrics
 print("\n\n=== Final Metrics ===")
