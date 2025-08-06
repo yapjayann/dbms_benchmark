@@ -44,10 +44,11 @@ QUESTDB_CONFIG = {
 # Create a Docker client to collect container statistics
 docker_client = docker.from_env()
 
-# === Get CPU and Memory usage for a Docker container ===
+
+# === Get average CPU and Memory usage for a Docker container ===
 def get_stats(container_name):
     cpu_percents = []
-    mem_usage = 0
+    mem_usages = []
 
     # Get container object
     container = docker_client.containers.get(container_name)
@@ -58,7 +59,7 @@ def get_stats(container_name):
         cpu_total_1 = stats1["cpu_stats"]["cpu_usage"]["total_usage"]
         sys_cpu_1 = stats1["cpu_stats"]["system_cpu_usage"]
         num_cpus = stats1["cpu_stats"].get("online_cpus", 1)
-        mem_usage = stats1["memory_stats"]["usage"]
+        mem_usages.append(stats1["memory_stats"]["usage"])
 
         time.sleep(1)
 
@@ -74,9 +75,12 @@ def get_stats(container_name):
             cpu_percent = (cpu_delta / sys_delta) * num_cpus * 100.0
             cpu_percents.append(cpu_percent)
 
-    # Average CPU usage over the 5 samples
+    # Average CPU and memory usage over the 5 samples
     avg_cpu = mean(cpu_percents) if cpu_percents else 0
-    return avg_cpu, mem_usage
+    avg_mem = mean(mem_usages) if mem_usages else 0
+
+    return avg_cpu, avg_mem
+
 
 # === Get data from CSV ===
 def get_csv_data(i): 

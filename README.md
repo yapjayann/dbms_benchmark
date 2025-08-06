@@ -7,8 +7,8 @@ This project compares the performance of three time-series databases — **Influ
 - ⏱️ Total write time
 - 🔍 Query latency (Full scan)
 - 🔍 Query Latency (Aggregation)
-- 🧠 Memory usage
-- 🧮 CPU usage
+- 🧠 Average Memory usage
+- 🧮 Average CPU usage
 
 Useful for data evaluation in data-heavy time-series applications.
 
@@ -142,31 +142,31 @@ dbms_benchmark/
 === Final Metrics ===
 
 InfluxDB:
-  write_throughput: 127.6691 records/s
-  avg_write_latency: 0.0065 s
-  total_write_time: 7.8327 s
-  read_latency: 0.0106 s
-  agg_query_latency: 0.0121 s
-  cpu: 6.3882 %
-  mem: 417878016.0000 bytes
+  write_throughput: 79.1586 records/s
+  avg_write_latency: 0.0115 s
+  total_write_time: 12.6329 s
+  read_latency: 0.0115 s
+  agg_query_latency: 0.0058 s
+  cpu: 6.3512 %
+  mem: 245889433.6000 bytes
 
 TimescaleDB:
-  write_throughput: 836.3015 records/s
-  avg_write_latency: 0.0006 s
-  total_write_time: 1.1957 s
-  read_latency: 0.0072 s
-  agg_query_latency: 0.0080 s
-  cpu: 0.3107 %
-  mem: 202743808.0000 bytes
+  write_throughput: 779.8135 records/s
+  avg_write_latency: 0.0007 s
+  total_write_time: 1.2824 s
+  read_latency: 0.0050 s
+  agg_query_latency: 0.0049 s
+  cpu: 0.2773 %
+  mem: 158942003.2000 bytes
 
 QuestDB:
-  write_throughput: 169.7411 records/s
-  avg_write_latency: 0.0031 s
-  total_write_time: 5.8913 s
-  read_latency: 0.0154 s
-  agg_query_latency: 0.0280 s
-  cpu: 18.9679 %
-  mem: 654708736.0000 bytes
+  write_throughput: 159.0458 records/s
+  avg_write_latency: 0.0038 s
+  total_write_time: 6.2875 s
+  read_latency: 0.0707 s
+  agg_query_latency: 0.1075 s
+  cpu: 14.1439 %
+  mem: 556681625.6000 bytes
 ```
 
 ---
