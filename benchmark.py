@@ -5,10 +5,12 @@ import docker
 from statistics import mean
 from datetime import datetime
 import pandas as pd
+import threading
+
 
 # === Configuration ===
 
-N = 1000  # Number of records extracted from dataset to insert in each database
+N = 100000  # Number of records extracted from dataset to insert in each database
 
 # === Load Cleaned Data ===
 csv_data = pd.read_csv("cleaned_power_data.csv")
@@ -45,41 +47,55 @@ QUESTDB_CONFIG = {
 docker_client = docker.from_env()
 
 
-# === Get average CPU and Memory usage for a Docker container ===
-def get_stats(container_name):
-    cpu_percents = []
-    mem_usages = []
 
-    # Get container object
-    container = docker_client.containers.get(container_name)
+class ResourceMonitor:
+    def __init__(self, container_name, interval=0.5):
+        self.container_name = container_name
+        self.interval = interval
+        self.cpu_percents = []
+        self.mem_usages = []
+        self.running = False
+        self.thread = None
+        self.docker_client = docker.from_env()
 
-    # Sample usage over 2 seconds to get average CPU and memory usage (because TimescaleDB can be quite fast ~ 1.3s)
-    for _ in range(4):
-        stats1 = container.stats(stream=False)
-        cpu_total_1 = stats1["cpu_stats"]["cpu_usage"]["total_usage"]
-        sys_cpu_1 = stats1["cpu_stats"]["system_cpu_usage"]
-        num_cpus = stats1["cpu_stats"].get("online_cpus", 1)
-        mem_usages.append(stats1["memory_stats"]["usage"])
+    def _monitor(self):
+        container = self.docker_client.containers.get(self.container_name)
+        while self.running:
+            stats1 = container.stats(stream=False)
+            cpu_total_1 = stats1["cpu_stats"]["cpu_usage"]["total_usage"]
+            sys_cpu_1 = stats1["cpu_stats"]["system_cpu_usage"]
+            num_cpus = stats1["cpu_stats"].get("online_cpus", 1)
+            mem_usage = stats1["memory_stats"]["usage"]
+            time.sleep(self.interval)
+            stats2 = container.stats(stream=False)
+            cpu_total_2 = stats2["cpu_stats"]["cpu_usage"]["total_usage"]
+            sys_cpu_2 = stats2["cpu_stats"]["system_cpu_usage"]
+            cpu_delta = cpu_total_2 - cpu_total_1
+            sys_delta = sys_cpu_2 - sys_cpu_1
+            if sys_delta > 0.0 and cpu_delta > 0.0:
+                cpu_percent = (cpu_delta / sys_delta) * num_cpus * 100.0
+                self.cpu_percents.append(cpu_percent)
+                self.mem_usages.append(mem_usage)
 
-        time.sleep(0.5)
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._monitor)
+        self.thread.start()
 
-        stats2 = container.stats(stream=False)
-        cpu_total_2 = stats2["cpu_stats"]["cpu_usage"]["total_usage"]
-        sys_cpu_2 = stats2["cpu_stats"]["system_cpu_usage"]
+    def stop(self):
+        self.running = False
+        if self.thread is not None:
+            self.thread.join()
+        avg_cpu = mean(self.cpu_percents) if self.cpu_percents else 0
+        avg_mem = mean(self.mem_usages) if self.mem_usages else 0
+        return avg_cpu, avg_mem
+    
+    def get_stats(self):
+        avg_cpu = mean(self.cpu_percents) if self.cpu_percents else 0
+        avg_mem = mean(self.mem_usages) if self.mem_usages else 0
+        return avg_cpu, avg_mem
 
-        # Calculate delta to get CPU usage %
-        cpu_delta = cpu_total_2 - cpu_total_1
-        sys_delta = sys_cpu_2 - sys_cpu_1
 
-        if sys_delta > 0.0 and cpu_delta > 0.0:
-            cpu_percent = (cpu_delta / sys_delta) * num_cpus * 100.0
-            cpu_percents.append(cpu_percent)
-
-    # Average CPU and memory usage over the 4 samples
-    avg_cpu = mean(cpu_percents) if cpu_percents else 0
-    avg_mem = mean(mem_usages) if mem_usages else 0
-
-    return avg_cpu, avg_mem
 
 
 # === Get data from CSV ===
@@ -100,6 +116,8 @@ def get_csv_data(i):
 # === Benchmark for InfluxDB ===
 def benchmark_influx():
     print("\n--- InfluxDB ---")
+    monitor = ResourceMonitor("influxdb_dbms") # start monitoring InfluxDB container
+    monitor.start()
     write_latencies = []
     start = time.time()
 
@@ -157,7 +175,10 @@ def benchmark_influx():
     agg_latency = time.time() - t0
 
 
-    cpu, mem = get_stats("influxdb_dbms")
+    # === Stop Monitoring and Get Stats ===
+    monitor.stop()
+    cpu, mem = monitor.get_stats()
+    
 
     return {
         "write_throughput": N / write_time,
@@ -172,6 +193,7 @@ def benchmark_influx():
 # === Benchmark for TimescaleDB ===
 def benchmark_timescale():
     print("\n--- TimescaleDB ---")
+    
     conn = psycopg2.connect(**POSTGRES_CONFIG)
     cur = conn.cursor()
 
@@ -191,6 +213,10 @@ def benchmark_timescale():
     """)
 
     conn.commit()
+
+    # === Start monitoring TimescaleDB AFTER table creation ===
+    monitor = ResourceMonitor("timescaledb_dbms") 
+    monitor.start()
 
     write_latencies = []
     start = time.time()
@@ -236,7 +262,9 @@ def benchmark_timescale():
     cur.close()
     conn.close()
 
-    cpu, mem = get_stats("timescaledb_dbms")
+    # === Stop Monitoring and Get Stats ===
+    monitor.stop()
+    cpu, mem = monitor.get_stats()
 
     return {
         "write_throughput": N / write_time,
@@ -269,6 +297,10 @@ def benchmark_questdb():
         );
     """)
     conn.commit()
+
+    # === Start monitoring AFTER table creation ===
+    monitor = ResourceMonitor("questdb_dbms")
+    monitor.start()
 
     write_latencies = []
     start = time.time()
@@ -314,7 +346,9 @@ def benchmark_questdb():
     cur.close()
     conn.close()
 
-    cpu, mem = get_stats("questdb_dbms")
+    # === Stop Monitoring and Get Stats ===
+    monitor.stop()
+    cpu, mem = monitor.get_stats()
 
     return {
         "write_throughput": N / write_time,
