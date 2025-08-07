@@ -302,7 +302,7 @@ def benchmark_timescale():
 
 # === Benchmark for QuestDB ===
 def benchmark_questdb():
-    print("\n--- QuestDB (ILP over TCP) ---")
+    print("\n--- QuestDB ---")
 
     # === Drop and recreate the table using SQL ===
     reset_conn = psycopg2.connect(**QUESTDB_CONFIG)

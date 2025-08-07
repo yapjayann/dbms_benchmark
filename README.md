@@ -210,7 +210,6 @@ QuestDB:
     - Queried using SQL via a **PostgreSQL-compatible connection**.
 
 
-
 - For each database, the benchmark:
   - Measures **write throughput** (records per second)
   - Calculates **average write latency** (per row)
