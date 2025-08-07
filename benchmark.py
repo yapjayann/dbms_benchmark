@@ -1,11 +1,12 @@
-import time
-import requests
-import psycopg2
-import docker
-from statistics import mean
-from datetime import datetime
-import pandas as pd
-import threading
+import time                     # For time measurements and delays
+import requests                 # For making HTTP requests (InfluxDB)
+import psycopg2                 # For PostgreSQL (TimescaleDB and QuestDB)
+import docker                   # To monitor Docker container stats
+from statistics import mean     # To compute average latencies, cpu and memory usage
+from datetime import datetime   # For handling timestamps
+import pandas as pd             # For data manipulation and reading CSV files
+import threading                # For running container monitoring in the background
+import socket                   # For sending data to QuestDB using ILP (InfluxDB Line Protocol)
 
 
 # === Configuration ===
@@ -47,7 +48,7 @@ QUESTDB_CONFIG = {
 docker_client = docker.from_env()
 
 
-
+# === Resource Monitor: Monitors CPU and memory usage of a specific Docker container ===
 class ResourceMonitor:
     def __init__(self, container_name, interval=0.5):
         self.container_name = container_name
@@ -118,6 +119,7 @@ def benchmark_influx():
     print("\n--- InfluxDB ---")
     monitor = ResourceMonitor("influxdb_dbms") # start monitoring InfluxDB container
     monitor.start()
+    # === Start writing data to InfluxDB ===
     write_latencies = []
     start = time.time()
     batch_size = 1000
@@ -148,7 +150,7 @@ def benchmark_influx():
             write_latencies.append(time.time() - t0)
             lines = []
 
-        
+    # Final batch write if there are remaining lines
     if lines:
         t0 = time.time()
         requests.post(INFLUX_URL, data="\n".join(lines), headers=INFLUX_HEADERS)
@@ -156,7 +158,7 @@ def benchmark_influx():
 
     write_time = time.time() - start
 
-    # Run full table query to measure read latency
+    # Read latency: full table
     t0 = time.time()
     query = {
     "query": '''
@@ -190,7 +192,7 @@ def benchmark_influx():
     monitor.stop()
     cpu, mem = monitor.get_stats()
     
-
+    # Return metrics
     return {
         "write_throughput": N / write_time,
         "avg_write_latency": mean(write_latencies),
@@ -204,7 +206,8 @@ def benchmark_influx():
 # === Benchmark for TimescaleDB ===
 def benchmark_timescale():
     print("\n--- TimescaleDB ---")
-    
+
+    # Connect to TimescaleDB
     conn = psycopg2.connect(**POSTGRES_CONFIG)
     cur = conn.cursor()
 
@@ -228,7 +231,7 @@ def benchmark_timescale():
     # === Start monitoring TimescaleDB AFTER table creation ===
     monitor = ResourceMonitor("timescaledb_dbms") 
     monitor.start()
-
+    # === Start writing data to TimescaleDB ===
     batch_size = 1000
     buffer = []
     write_latencies = []
@@ -257,7 +260,7 @@ def benchmark_timescale():
     conn.commit()
     write_time = time.time() - start
 
-    # Simple read query
+    # Read latency: full table
     t0 = time.time()
     cur.execute("SELECT * FROM power_data;")
     cur.fetchall()
@@ -283,6 +286,7 @@ def benchmark_timescale():
     monitor.stop()
     cpu, mem = monitor.get_stats()
 
+    # Return metrics
     return {
         "write_throughput": N / write_time,
         "avg_write_latency": mean(write_latencies),
@@ -292,68 +296,91 @@ def benchmark_timescale():
         "cpu": cpu,
         "mem": mem
     }
+
+
+
 
 # === Benchmark for QuestDB ===
 def benchmark_questdb():
-    print("\n--- QuestDB ---")
-    conn = psycopg2.connect(**QUESTDB_CONFIG)
-    cur = conn.cursor()
+    print("\n--- QuestDB (ILP over TCP) ---")
 
-    # Reset table
-    cur.execute("DROP TABLE IF EXISTS power_data;")
-    cur.execute("""
+    # === Drop and recreate the table using SQL ===
+    reset_conn = psycopg2.connect(**QUESTDB_CONFIG)
+    reset_cur = reset_conn.cursor()
+    reset_cur.execute("DROP TABLE IF EXISTS power_data;")
+    reset_cur.execute("""
         CREATE TABLE power_data (
             timestamp TIMESTAMP,
-            global_active_power DOUBLE PRECISION,
-            global_reactive_power DOUBLE PRECISION,
-            voltage DOUBLE PRECISION,
-            global_intensity DOUBLE PRECISION,
-            sub_metering_1 DOUBLE PRECISION,
-            sub_metering_2 DOUBLE PRECISION,
-            sub_metering_3 DOUBLE PRECISION
-        );
+            global_active_power DOUBLE,
+            global_reactive_power DOUBLE,
+            voltage DOUBLE,
+            global_intensity DOUBLE,
+            sub_metering_1 LONG,
+            sub_metering_2 LONG,
+            sub_metering_3 LONG
+        ) timestamp(timestamp);
     """)
-    conn.commit()
+    reset_conn.commit()
+    reset_cur.close()
+    reset_conn.close()
 
-    # === Start monitoring AFTER table creation ===
     monitor = ResourceMonitor("questdb_dbms")
     monitor.start()
-
-    batch_size = 1000
-    buffer = []
+    # === Start writing data using ILP over TCP ===
     write_latencies = []
+    batch_size = 1000
+    lines = []
     start = time.time()
+
+    # Helper function to send TCP payload to QuestDB
+    def send_ilp_batch(batch_lines):
+        payload = "\n".join(batch_lines).encode("utf-8")
+        with socket.create_connection(("localhost", 9009)) as sock:
+            sock.sendall(payload)
 
     for i in range(N):
         data = get_csv_data(i)
-        buffer.append((
-            data["timestamp"], data["gap"], data["grp"], data["voltage"],
-            data["intensity"], data["sub_1"], data["sub_2"], data["sub_3"]
-        ))
+        ts = int(data["timestamp"].timestamp() * 1_000_000)  # microseconds
 
-        if len(buffer) == batch_size:
+        # Embed timestamp as a field, not just as a trailing value
+        line = (
+            f"power_data,"
+            f"timestamp={ts}i "  # Store timestamp as tag/field to match schema
+            f"global_active_power={data['gap']},"
+            f"global_reactive_power={data['grp']},"
+            f"voltage={data['voltage']},"
+            f"global_intensity={data['intensity']},"
+            f"sub_metering_1={data['sub_1']}i,"
+            f"sub_metering_2={data['sub_2']}i,"
+            f"sub_metering_3={data['sub_3']}i "
+            f"{ts}"
+        )
+        lines.append(line)
+
+        if len(lines) == batch_size:
             t0 = time.time()
-            args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s,%s)", row).decode() for row in buffer)
-            cur.execute(f"INSERT INTO power_data VALUES {args_str}")
+            send_ilp_batch(lines)
             write_latencies.append(time.time() - t0)
-            buffer = []
+            lines = []
 
-    if buffer:
+    if lines:
         t0 = time.time()
-        args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s,%s)", row).decode() for row in buffer)
-        cur.execute(f"INSERT INTO power_data VALUES {args_str}")
+        send_ilp_batch(lines)
         write_latencies.append(time.time() - t0)
 
-    conn.commit()
     write_time = time.time() - start
 
-    # Read whole table test query performance
+    # === Query using psycopg2 ===
+    conn = psycopg2.connect(**QUESTDB_CONFIG)
+    cur = conn.cursor()
+
+    # Full table read
     t0 = time.time()
     cur.execute("SELECT * FROM power_data;")
     cur.fetchall()
     read_latency = time.time() - t0
 
-    # Aggregation query: hourly average of global_active_power
+    # Aggregation query
     t0 = time.time()
     cur.execute("""
         SELECT date_trunc('hour', timestamp) AS hour,
@@ -365,14 +392,13 @@ def benchmark_questdb():
     cur.fetchall()
     agg_latency = time.time() - t0
 
-    
     cur.close()
     conn.close()
 
-    # === Stop Monitoring and Get Stats ===
     monitor.stop()
     cpu, mem = monitor.get_stats()
 
+    # Return metrics
     return {
         "write_throughput": N / write_time,
         "avg_write_latency": mean(write_latencies),
@@ -382,6 +408,9 @@ def benchmark_questdb():
         "cpu": cpu,
         "mem": mem
     }
+
+
+
 
 # === Run All Benchmarks and Display Results ===
 print("Starting benchmarks...")
@@ -390,21 +419,24 @@ results = {}
 # InfluxDB
 results["InfluxDB"] = benchmark_influx()
 
-""" Cooldown before next benchmark
+# Cooldown before next benchmark
 print("\n🕒 Cooling down before TimescaleDB test...\n")
-time.sleep(10)  # Cooldown to allow InfluxDB to stabilize"""
+time.sleep(10)  # Cooldown to allow InfluxDB to stabilize
 
 # TimescaleDB
 results["TimescaleDB"] = benchmark_timescale()
 
-""" Cooldown before next benchmark
+# Cooldown before next benchmark
 print("\n🕒 Cooling down before QuestDB test...\n")
-time.sleep(10) # Cooldown to allow TimescaleDB to stabilize"""
+time.sleep(10) # Cooldown to allow TimescaleDB to stabilize
 
 # QuestDB
 results["QuestDB"] = benchmark_questdb()
 
-# Nicely formatted printout of all metrics
+
+
+
+# === Final Results ===
 print("\n\n=== Final Metrics ===")
 print(f"\n📊 Benchmark Results for {N} Records\n")
 for db, metrics in results.items():

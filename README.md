@@ -156,66 +156,66 @@ Starting benchmarks...
 
 === Final Metrics ===
 
-📊 Benchmark Results for 1000 Records
+📊 Benchmark Results for 100000 Records
 
 
 InfluxDB:
-  write_throughput: 94.9002 records/s
-  avg_write_latency: 0.0087 s
-  total_write_time: 10.5374 s
-  read_latency: 0.0159 s
-  agg_query_latency: 0.0240 s
-  cpu: 35.0333 %
-  mem: 376055125.3333 bytes
+  write_throughput: 966.6997 records/s
+  avg_write_latency: 0.1372 s
+  total_write_time: 103.4447 s
+  read_latency: 0.0083 s
+  agg_query_latency: 0.0068 s
+  cpu: 21.4086 %
+  mem: 579503340.3077 bytes
 
 TimescaleDB:
-  write_throughput: 277.4155 records/s
-  avg_write_latency: 0.0016 s
-  total_write_time: 3.6047 s
-  read_latency: 0.0189 s
-  agg_query_latency: 0.0208 s
-  cpu: 9.1855 %
-  mem: 118181888.0000 bytes
+  write_throughput: 1379.0252 records/s
+  avg_write_latency: 0.0535 s
+  total_write_time: 72.5150 s
+  read_latency: 0.9952 s
+  agg_query_latency: 0.6203 s
+  cpu: 4.9794 %
+  mem: 222076065.6842 bytes
 
 QuestDB:
-  write_throughput: 112.2267 records/s
-  avg_write_latency: 0.0049 s
-  total_write_time: 8.9105 s
-  read_latency: 0.0722 s
-  agg_query_latency: 0.0358 s
-  cpu: 325.2900 %
-  mem: 621102421.3333 bytes
+  write_throughput: 1052.9850 records/s
+  avg_write_latency: 0.0007 s
+  total_write_time: 94.9681 s
+  read_latency: 0.0228 s
+  agg_query_latency: 0.0284 s
+  cpu: 25.0315 %
+  mem: 1071793322.6667 bytes
 ```
 
 ---
 
 ## 🧠 How It Works
 
-- The benchmark script loads **real, cleaned power consumption data** from `cleaned_power_data.csv` (sampled to `N` rows, modifiable in the script).
-- It writes the data into each database using its respective ingestion method:
+* The benchmark script loads **real, cleaned power consumption data** from `cleaned_power_data.csv` (sampled to `N` rows, modifiable in the script).
+* It writes the data into each database using its respective ingestion method:
 
   - **InfluxDB**:
-    - Uses the **native line protocol** over HTTP via direct `POST` requests.
-    - Data is written **one row at a time** with timestamps in **UNIX seconds**.
+    - Uses the **native line protocol** over HTTP via batched `POST` requests.
+    - Data is sent in **chunks of 1000 rows** with timestamps in **UNIX seconds**.
     - Queried using the **Flux query language**.
 
   - **TimescaleDB**:
-    - Uses standard **PostgreSQL SQL inserts** via the `psycopg2` library.
-    - Rows are inserted **one by one in a loop**, then committed together.
+    - Uses **batch inserts** with `psycopg2` and PostgreSQL syntax.
+    - Rows are grouped in **batches of 1000** and inserted with a single SQL command.
     - Queried using plain SQL (e.g., `SELECT * FROM power_data`).
 
   - **QuestDB**:
-    - Uses the **PostgreSQL wire protocol** via `psycopg2` for ingestion (not the REST API).
-    - Inserts are done **row by row**, similar to TimescaleDB.
-    - Queried using SQL over the same PostgreSQL-compatible connection.
+    - Uses the **Influx Line Protocol over TCP** for fast ingestion.
+    - Data is sent in **1000-row batches** with timestamps in **UNIX microseconds**.
+    - Queried using SQL via a **PostgreSQL-compatible connection**.
 
-> ⚠️ While QuestDB supports a REST API, it’s not optimized for high-throughput ingestion. This benchmark uses the PostgreSQL wire protocol for more consistent performance.
+
 
 - For each database, the benchmark:
   - Measures **write throughput** (records per second)
   - Calculates **average write latency** (per row)
   - Measures **read latency** (for full scan and aggregation)
-  - Monitors **CPU and memory usage** of each Docker container
+  - Monitors **CPU and memory usage** of each Docker container for write/read operations
 
 ---
 
