@@ -120,6 +120,8 @@ def benchmark_influx():
     monitor.start()
     write_latencies = []
     start = time.time()
+    batch_size = 1000
+    lines = []
 
     for i in range(N):
         data = get_csv_data(i)
@@ -137,10 +139,19 @@ def benchmark_influx():
             f"sub_metering_3={data['sub_3']} "
             f"{ts}"
         )
+        lines.append(line)
 
-        # Measure write latency
+        # Measure batch write latency
+        if len(lines) == batch_size:
+            t0 = time.time()
+            requests.post(INFLUX_URL, data="\n".join(lines), headers=INFLUX_HEADERS)
+            write_latencies.append(time.time() - t0)
+            lines = []
+
+        
+    if lines:
         t0 = time.time()
-        requests.post(INFLUX_URL, data=line, headers=INFLUX_HEADERS)
+        requests.post(INFLUX_URL, data="\n".join(lines), headers=INFLUX_HEADERS)
         write_latencies.append(time.time() - t0)
 
     write_time = time.time() - start
@@ -218,23 +229,29 @@ def benchmark_timescale():
     monitor = ResourceMonitor("timescaledb_dbms") 
     monitor.start()
 
+    batch_size = 1000
+    buffer = []
     write_latencies = []
     start = time.time()
 
     for i in range(N):
         data = get_csv_data(i)
-        t0 = time.time()
-        cur.execute("""
-            INSERT INTO power_data (
-                timestamp, global_active_power, global_reactive_power,
-                voltage, global_intensity,
-                sub_metering_1, sub_metering_2, sub_metering_3
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-        """, (
+        buffer.append((
             data["timestamp"], data["gap"], data["grp"], data["voltage"],
             data["intensity"], data["sub_1"], data["sub_2"], data["sub_3"]
         ))
+
+        if len(buffer) == batch_size:
+            t0 = time.time()
+            args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s,%s)", row).decode() for row in buffer)
+            cur.execute(f"INSERT INTO power_data VALUES {args_str}")
+            write_latencies.append(time.time() - t0)
+            buffer = []
+
+    if buffer:
+        t0 = time.time()
+        args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s,%s)", row).decode() for row in buffer)
+        cur.execute(f"INSERT INTO power_data VALUES {args_str}")
         write_latencies.append(time.time() - t0)
 
     conn.commit()
@@ -302,23 +319,29 @@ def benchmark_questdb():
     monitor = ResourceMonitor("questdb_dbms")
     monitor.start()
 
+    batch_size = 1000
+    buffer = []
     write_latencies = []
     start = time.time()
 
     for i in range(N):
         data = get_csv_data(i)
-        t0 = time.time()
-        cur.execute("""
-            INSERT INTO power_data (
-                timestamp, global_active_power, global_reactive_power,
-                voltage, global_intensity,
-                sub_metering_1, sub_metering_2, sub_metering_3
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-        """, (
+        buffer.append((
             data["timestamp"], data["gap"], data["grp"], data["voltage"],
             data["intensity"], data["sub_1"], data["sub_2"], data["sub_3"]
         ))
+
+        if len(buffer) == batch_size:
+            t0 = time.time()
+            args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s,%s)", row).decode() for row in buffer)
+            cur.execute(f"INSERT INTO power_data VALUES {args_str}")
+            write_latencies.append(time.time() - t0)
+            buffer = []
+
+    if buffer:
+        t0 = time.time()
+        args_str = ','.join(cur.mogrify("(%s,%s,%s,%s,%s,%s,%s,%s)", row).decode() for row in buffer)
+        cur.execute(f"INSERT INTO power_data VALUES {args_str}")
         write_latencies.append(time.time() - t0)
 
     conn.commit()
@@ -367,16 +390,16 @@ results = {}
 # InfluxDB
 results["InfluxDB"] = benchmark_influx()
 
-# Cooldown before next benchmark
+""" Cooldown before next benchmark
 print("\n🕒 Cooling down before TimescaleDB test...\n")
-time.sleep(10)  # Cooldown to allow InfluxDB to stabilize
+time.sleep(10)  # Cooldown to allow InfluxDB to stabilize"""
 
 # TimescaleDB
 results["TimescaleDB"] = benchmark_timescale()
 
-# Cooldown before next benchmark
+""" Cooldown before next benchmark
 print("\n🕒 Cooling down before QuestDB test...\n")
-time.sleep(10) # Cooldown to allow TimescaleDB to stabilize
+time.sleep(10) # Cooldown to allow TimescaleDB to stabilize"""
 
 # QuestDB
 results["QuestDB"] = benchmark_questdb()
@@ -394,4 +417,3 @@ for db, metrics in results.items():
             else "bytes"
         )
         print(f"  {k}: {v:.4f} {unit}")
-
