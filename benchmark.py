@@ -320,6 +320,7 @@ def benchmark_questdb():
             sub_metering_3 LONG
         ) timestamp(timestamp);
     """)
+
     reset_conn.commit()
     reset_cur.close()
     reset_conn.close()
@@ -343,7 +344,7 @@ def benchmark_questdb():
         ts = int(data["timestamp"].timestamp() * 1_000_000_000)  # nanoseconds
 
         line = (
-            f"power_data "
+            f"power_data "  
             f"global_active_power={data['gap']}," 
             f"global_reactive_power={data['grp']}," 
             f"voltage={data['voltage']},"                  
