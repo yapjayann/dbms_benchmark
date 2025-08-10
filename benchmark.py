@@ -11,7 +11,7 @@ import socket                   # For sending data to QuestDB using ILP (InfluxD
 
 # === Configuration ===
 
-N = 100000  # Number of records extracted from dataset to insert in each database
+N = 1000  # Number of records extracted from dataset to insert in each database
 
 # === Load Cleaned Data ===
 csv_data = pd.read_csv("cleaned_power_data.csv")
@@ -340,19 +340,17 @@ def benchmark_questdb():
 
     for i in range(N):
         data = get_csv_data(i)
-        ts = int(data["timestamp"].timestamp() * 1_000_000)  # microseconds
+        ts = int(data["timestamp"].timestamp() * 1_000_000_000)  # nanoseconds
 
-        # Embed timestamp as a field, not just as a trailing value
         line = (
-            f"power_data,"
-            f"timestamp={ts}i "  # Store timestamp as tag/field to match schema
-            f"global_active_power={data['gap']},"
-            f"global_reactive_power={data['grp']},"
-            f"voltage={data['voltage']},"
-            f"global_intensity={data['intensity']},"
-            f"sub_metering_1={data['sub_1']}i,"
-            f"sub_metering_2={data['sub_2']}i,"
-            f"sub_metering_3={data['sub_3']}i "
+            f"power_data "
+            f"global_active_power={data['gap']}," 
+            f"global_reactive_power={data['grp']}," 
+            f"voltage={data['voltage']},"                  
+            f"global_intensity={data['intensity']}," 
+            f"sub_metering_1={int(data['sub_1'])}i,"
+            f"sub_metering_2={int(data['sub_2'])}i,"
+            f"sub_metering_3={int(data['sub_3'])}i "
             f"{ts}"
         )
         lines.append(line)
