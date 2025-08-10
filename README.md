@@ -118,7 +118,6 @@ Before benchmarking, you need to generate a cleaned dataset from the original so
 5. **Stop the containers when done and delete volumes**
 
    ```bash
-   docker compose down
    docker compose down -v
    ```
 
